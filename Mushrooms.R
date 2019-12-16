@@ -6,6 +6,7 @@ if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-
 if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(Rborist)) install.packages("Rborist", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(cluster)) install.packages("cluster", repos = "http://cran.us.r-project.org", dependencies = TRUE)
+if(!require(reshape2)) install.packages("reshape2", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 
 source("predict_model.R")
 
@@ -115,6 +116,23 @@ for (i in 1:(ncol(habitat_l)-1))
 rm(summarized_data, i, plot)
 grid.arrange(grobs=plots,ncol=3)
 
+uncertinity_df <- data.frame(X=factor(), idx=numeric(), Y=factor(), idy=numeric(), value=numeric())
+labels <- names(train_data)
+for (i in 1:ncol(train_data))
+{
+  for(j in 1:ncol(train_data))
+  {
+    uncertinity_df <- bind_rows(uncertinity_df, data.frame(Y = labels[j], idy=j , X=labels[i], idx=i, value=uncertinity(train_data,i,j)))
+  }
+}
+
+uncertinity_df %>% ggplot(aes(x=reorder(X,idx), y=reorder(Y,-idy), fill=value)) + geom_tile() + 
+        geom_text(aes(label=round(value,2)), color='white') +
+        theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+        xlab('X feature') + ylab('Y feature') + ggtitle('Uncertinity score U(X|Y)')
+
+
+image(uncertinity_matrix)
 
 #remove 'veil-type' it has only one value, therefore is not relevant
 train_data2 <- train_data %>% select(-`veil-type`)

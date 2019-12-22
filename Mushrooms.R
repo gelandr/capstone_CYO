@@ -6,9 +6,9 @@ if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-
 if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(Rborist)) install.packages("Rborist", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(cluster)) install.packages("cluster", repos = "http://cran.us.r-project.org", dependencies = TRUE)
-if(!require(reshape2)) install.packages("reshape2", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 
 source("predict_model.R")
+source("functions.R")
 
 # Mushrooms dataset:
 # https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/
@@ -40,113 +40,52 @@ mushroom_data <- as.data.frame(mushroom_data)
 set.seed(1, sample.kind = "Rounding")
 #create index for train and test set
 #10% of the data will be used for the test set
-test_idx = createDataPartition(y = mushroom_data$classes, times=1, p=0.2, list=FALSE)
+test_idx = createDataPartition(y = mushroom_data$classes, times=1, p=0.1, list=FALSE)
 train_data = mushroom_data[-test_idx,]
 test_data = mushroom_data[test_idx,]
 rm(fl, mushroom_data, test_idx)
 
 
-plots <- list()
-#Plots all the attributes for eatable <-> poisious
-for (i in 1:(ncol(train_data)-1))
-{
-  summarized_data <- train_data %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
-  names(summarized_data)[2] <- "attr"
-  plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
-          xlab(names(train_data)[i+1]) + ylab("Eatable") 
-  plots[[i]] <- plot
-}
-rm(summarized_data, i, plot)
-grid.arrange(grobs=plots,ncol=3)
+feature_ditribution_plot(train_data)
+uncertinity_plot(train_data)
 
-ring_type_ep <- test_data %>% filter(`ring-type` %in% c('e','p')) %>% select(-`ring-type`)
-plots <- list()
-#Plots all the attributes for eatable <-> poisious
-for (i in 1:(ncol(ring_type_ep)-1))
-{
-  summarized_data <- ring_type_ep %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
-  names(summarized_data)[2] <- "attr"
-  plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
-          xlab(names(ring_type_ep)[i+1]) + ylab("Eatable") 
-  plots[[i]] <- plot
-}
-rm(summarized_data, i, plot)
-grid.arrange(grobs=plots,ncol=3)
+odor_n <- train_data %>% filter(`odor` == 'n') %>% select(-`odor`)
+feature_ditribution_plot(odor_n)
 
+spore_print_color_w <- odor_n %>% filter(`spore-print-color` == 'w') %>% select(-`spore-print-color`)
+feature_ditribution_plot(spore_print_color_w)
 
-odor_n <- ring_type_ep %>% filter(odor == 'n') %>% select(-odor)
-plots <- list()
-#Plots all the attributes for eatable <-> poisious
-for (i in 1:(ncol(odor_n)-1))
-{
-  summarized_data <- odor_n %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
-  names(summarized_data)[2] <- "attr"
-  plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
-    xlab(names(odor_n)[i+1]) + ylab("Eatable") 
-  plots[[i]] <- plot
-}
-rm(summarized_data, i, plot)
-grid.arrange(grobs=plots,ncol=3)
+gill_color_w <- spore_print_color_w %>% filter(`gill-color` == 'w') %>% select(-`gill-color`)
+feature_ditribution_plot(gill_color_w)
 
-spore_print_color <- odor_n %>% filter(`spore-print-color` == 'w') %>% select(-`spore-print-color`)
-plots <- list()
-#Plots all the attributes for eatable <-> poisious
-for (i in 1:(ncol(spore_print_color)-1))
-{
-  summarized_data <- spore_print_color %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
-  names(summarized_data)[2] <- "attr"
-  plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
-    xlab(names(spore_print_color)[i+1]) + ylab("Eatable") 
-  plots[[i]] <- plot
-}
-rm(summarized_data, i, plot)
-grid.arrange(grobs=plots,ncol=3)
+gill_size_n <- gill_color_w %>% filter(`gill-size` == 'n') %>% select(-`gill-size`)
+feature_ditribution_plot(gill_size_n)
 
-habitat_l <- spore_print_color %>% filter(habitat == 'l') %>% select(-habitat)
-plots <- list()
-#Plots all the attributes for eatable <-> poisious
-for (i in 1:(ncol(habitat_l)-1))
-{
-  summarized_data <- habitat_l %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
-  names(summarized_data)[2] <- "attr"
-  plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
-    xlab(names(habitat_l)[i+1]) + ylab("Eatable") 
-  plots[[i]] <- plot
-}
-rm(summarized_data, i, plot)
-grid.arrange(grobs=plots,ncol=3)
-
-uncertinity_df <- data.frame(X=factor(), idx=numeric(), Y=factor(), idy=numeric(), value=numeric())
-labels <- names(train_data)
-for (i in 1:ncol(train_data))
-{
-  for(j in 1:ncol(train_data))
-  {
-    uncertinity_df <- bind_rows(uncertinity_df, data.frame(Y = labels[j], idy=j , X=labels[i], idx=i, value=uncertinity(train_data,i,j)))
-  }
-}
-
-uncertinity_df %>% ggplot(aes(x=reorder(X,idx), y=reorder(Y,-idy), fill=value)) + geom_tile() + 
-        geom_text(aes(label=round(value,2)), color='white') +
-        theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
-        xlab('X feature') + ylab('Y feature') + ggtitle('Uncertinity score U(X|Y)')
-
-
-image(uncertinity_matrix)
+stalk_surface_below <- gill_size_n %>% filter(`stalk-surface-below-ring` == 's') %>% select(-`stalk-surface-below-ring`)
+feature_ditribution_plot(stalk_surface_below)
 
 #remove 'veil-type' it has only one value, therefore is not relevant
 train_data2 <- train_data %>% select(-`veil-type`)
 
+#train decision tree
+predicted <- predict_dectree(test_data %>% select(-classes))
+result_dec_tree_model <- confusionMatrix( predicted$y, test_data$classes)
+
+#train features model with cross validation
+F1_scores <- cross_validation(train_data,5, calculate_F1_score, 1:22) %>% group_by(feature_count) %>%
+  summarise(F1=mean(F1))
+opt_feature_count <- which.max(F1_scores$F1)
+result_feature_model <- confusionMatrix(predict_feature_model(test_data, 
+                        train_feature_model(train_data, opt_feature_count)), test_data$classes)
+
+
 #train knn method
 train_knn <- train(classes ~ ., method="knn", data = train_data2)  
-
 result_knn <- confusionMatrix(predict(train_knn, test_data, type="raw"), test_data$classes)
 
+#train random forest
 train_rforest <- train(classes ~ .,
                     method = "Rborist",
                     tuneGrid = data.frame(predFixed = 2, minNode = c(3, 50)),
                     data = train_data2)
 result_rforest <- confusionMatrix(predict(train_rforest, test_data), test_data$classes)
-
-predicted <- predict(test_data %>% select(-classes))
-result_model <- confusionMatrix( predicted$y, test_data$classes)

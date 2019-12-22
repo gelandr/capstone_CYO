@@ -135,7 +135,7 @@ rm(mushroom_data, test_idx)
 
 ## Available Data
 
-For the analysis we have data about 6,500 mushrooms.
+The dataset contains 8133 records. For the analysis we have data about 6,500 mushrooms (80% of all data).
 All the features are categorical with different possible values.
 
   1. cap-shape:                bell=b,conical=c,convex=x,flat=f,
@@ -194,7 +194,7 @@ for (i in 1:(ncol(train_data)-1))
 grid.arrange(grobs=plots,ncol=3)
 ```
 
-We can see, that the feature veil-type has only the value 'p' (partial), there is no data record with the veil-type value 'u' (universal). This feature can not provide decision information about the mushrooms if it has always the same value. Therefor we can remove this feature from the dataset.
+We can see, that the feature veil-type has only the value 'p' (partial), there is no data record with the veil-type value 'u' (universal). This feature can not provide decision information about the mushrooms, therefor we can remove this feature from the dataset.
 
 On the other side, there are some features with values that can decide the classification.
 E.g. if we see a mushroom with the value 'g' (grooves) for the feature cap-surface, we can classify the mushroom as poisonous.

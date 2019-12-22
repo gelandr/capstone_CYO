@@ -20,11 +20,11 @@ The "Mushrooms" dataset was recorded down from The Audubon Society Field Guide t
 
 The goal of this project is to develop a model based on data science and machine learning techniques to predict if a mushroom is eatable based on the known attributes.
 
-The dataset contains 8124 records and uses 22 attributes to describe the mushrooms. Each dataset contains additional attribute to flag if the mushroom is eatable or not.
+The dataset contains 8124 records and uses 22 attributes to describe the mushrooms. Each dataset contains additional attribute to flag if the mushroom is edible or not.
 
-We will use 80% of the avaiable data for train our model. The reamining 20% will be used as test dataset for evaluating the developed model.
+I used 80% of the avaiable data for train the model. The reamining 20% will be used as test dataset for evaluating the developed model.
 
-For the developed model is very important to detect poisonus mushrooms to avoid possible health damages or death. Therefore we will evluate the model performance with the F1 score instead of the overal accuracy, beacuse it's very important to reach high sensitivity with our model.
+For the developed model is very important to detect poisonus mushrooms to avoid possible health damages or death. Therefore the model performance will be evaluated with the F1 score instead of the overal accuracy. Because the models use the edible prediction as true value, I will try to get a high specificity with the developed models..
 
 
 The following steps were done during the project for developing the algorithm:
@@ -35,7 +35,10 @@ The following steps were done during the project for developing the algorithm:
 4.	Implement and train the model based on the train set
 5.	Review the model based on the test set
 
-The final model performed an F1 score of 1 by using a knn prediction model.
+I developed two different prediction model. The first model uses a decision tree, the second model uses a reduced set of the features with high correlation to the edibility.
+
+The first model reached an F1 score of 0.9934 with sensitivity 0.9869 and specificity 1.0.
+The second model reached an F1 score of 1 with sensitivity 1 and specificity 1. That shows, that the second model had a perfect prediction for the test set.
 
 
 # Methods & analysis
@@ -49,7 +52,6 @@ For the analysis the data we will use the following R packages:
 * caret 
 * gridExtra
 * ggplot2
-* Rborist
 
 the following R code loads and install the required packages if needed:
 
@@ -62,11 +64,9 @@ if(!require(gridExtra)) install.packages("gridExtra",
                          repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(ggplot2)) install.packages("ggplot2", 
                          repos = "http://cran.us.r-project.org", dependencies = TRUE)
-if(!require(Rborist)) install.packages("Rborist", 
-                         repos = "http://cran.us.r-project.org", dependencies = TRUE)
 ```
 
-At first, we need to prepare the data set for the analysis. The analysis is based on the reduced movielens data set including approximately 1,000,000 rating data.
+At first, we need to prepare the data set for the analysis. The mushrooms dataseet contains 8,124 records about different mushrooms.
 
 The following R code downloads the data from the <https://archive.ics.uci.edu/ml/datasets/mushroom> site. To avoid unnecessary data traffic, the data will be downloaded only if not done yet.
 
@@ -135,7 +135,7 @@ rm(mushroom_data, test_idx)
 
 ## Available Data
 
-The dataset contains 8133 records. For the analysis we have data about 6,500 mushrooms (80% of all data).
+The dataset contains 8,124 records. For the analysis we have data about 6,500 mushrooms (80% of all data).
 All the features are categorical with different possible values.
 
   1. cap-shape:                bell=b,conical=c,convex=x,flat=f,
@@ -173,29 +173,215 @@ All the features are categorical with different possible values.
   22. habitat:                  grasses=g,leaves=l,meadows=m,paths=p,
                                   urban=u,waste=w,woods=d 
                                   
+For testing the preformance the predition model we have about 1,600 mushrooms data (20% of all data)
+The dataset contains only the short 1 character code of the attribute values, but it's not disturbing for the model development. 
                                   
 ## Feature analysis
 
-As first step we can investigate the distribution of the features corresponding to the classification edible/poisonous.
+As first step we can investigate the distribution of the features corresponding to the edibility classification.
+
 The following code plots this distribution for each feature. 
 
 ```{r classification_per_feature, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
 
-plots <- list()
-#Plots all the attributes for eatable <-> poisious
-for (i in 1:(ncol(train_data)-1))
-{
-  summarized_data <- train_data %>% group_by(classes, .[,i+1]) %>% summarise(count = n())
-  names(summarized_data)[2] <- "attr"
-  plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=count)) +
-          xlab(names(train_data)[i+1]) + ylab("Classification") 
-  plots[[i]] <- plot
+feature_ditribution_plot <- function(data){
+  plots <- list()
+  #Plots all the attributes for eatable <-> poisious
+  for (i in 1:(ncol(data)-1))
+  {
+    summarized_data <- data %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
+    names(summarized_data)[2] <- "attr"
+    plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
+      xlab(names(data)[i+1]) + ylab("Edibility") 
+    plots[[i]] <- plot
+  }
+  rm(summarized_data, i, plot)
+  grid.arrange(grobs=plots,ncol=3)
 }
-grid.arrange(grobs=plots,ncol=3)
+
+feature_ditribution_plot(train_data)
+
 ```
 
 We can see, that the feature veil-type has only the value 'p' (partial), there is no data record with the veil-type value 'u' (universal). This feature can not provide decision information about the mushrooms, therefor we can remove this feature from the dataset.
 
 On the other side, there are some features with values that can decide the classification.
-E.g. if we see a mushroom with the value 'g' (grooves) for the feature cap-surface, we can classify the mushroom as poisonous.
+E.g. if we see a mushroom with the value 'f' (foul) for the feature odor, we can classify the mushroom as poisonous.
+The feature values 'c', 'f', 'l', 'm', 'p', 's', 'y' for the attribute odor can give us a classification. With this information we can classify 3,689 mushrooms.
+We can not classify only the mushrooms with the odor value 'n' (none). There are 2,809 mushrooms remaining in the dataset without classification. 
 
+We can try to analyse all the mushrooms, where the odor value is 'n'. For this analysis we can remove the attribute odor from the dataset, because we examine a specific odor value.
+
+The following code removes the odor attribute and plots the feature distirbution for the remaining data:
+
+```{r classification_per_feature_without_odor, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
+odor_n <- train_data %>% filter(`odor` == 'n') %>% select(-`odor`)
+feature_ditribution_plot(odor_n)
+```
+
+In the reduced data set we see again some features that we can use for classification the mushrooms.
+
+E.g. if we see a mushroom with the value 'k' (black) for the feature spore-print-color, we can classify the mushroom as edible.
+The feature values 'b', 'h', 'k', 'n', 'o', 'r', 'y' for the feature spore-print-color can give us a classification for the remaining data set.
+We can not make a classification only it the spore-print-color value is 'w' (white). 
+
+We can reuse the same logik like for the feature odor and filter the remaing data with the spore-print-color feature value 'w'.
+
+The following code removes the odor attribute and plots the feature distirbution for the remaining data:
+
+```{r classification_per_feature_without_spore_print_color, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
+spore_print_color_w <- odor_n %>% filter(`spore-print-color` == 'w') %>% 
+                       select(-`spore-print-color`)
+feature_ditribution_plot(spore_print_color_w)
+```
+
+We can repeate this analysis and look for features that we can use for classifying the remaining data set.
+As next step we can get the gill-color feature and examine only the mushrooms with the grill color 'w' (white).
+
+```{r classification_per_feature_gill_color_w, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
+gill_color_w <- spore_print_color_w %>% filter(`gill-color` == 'w') %>% 
+                select(-`gill-color`)
+feature_ditribution_plot(gill_color_w)
+
+```
+
+As next step we can get the gill-size feature and examine only the mushrooms with the grill size 'n' (narrow).
+
+```{r classification_per_feature_gill_size_n, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
+gill_size_n <- gill_color_w %>% filter(`gill-size` == 'n') %>% select(-`gill-size`)
+feature_ditribution_plot(gill_size_n)
+```
+
+As next step we can get the stalk-surface-below-ring feature and examine only the mushrooms with the stalk-surface-belowe-ring 's' (smooth).
+
+```{r classification_per_feature_stalk_surface_below, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
+stalk_surface_below <- gill_size_n %>% filter(`stalk-surface-below-ring` == 's') %>% 
+                      select(-`stalk-surface-below-ring`)
+feature_ditribution_plot(stalk_surface_below)
+
+```
+The remaining dataset has only 25 mushrooms. As we can see on the plot, now we can use some feature for classifying this remaining mushrooms.
+E.g. the feature ring-type give us a good classification: if we have a ring type of 'e' (evanescent) than the mushroom is edible. On the other case, if we have a ring-type of 'p' (pedant), the mushroom is poisonous.
+
+With the steps about we defined a decision tree for classifying all the mushrooms in the train set. We can use this information to develop a classification model for the mushrooms.
+
+The analyse above give us an other important information: some fatures are more relevant for the classification some features gives no additional information for the method.
+That means, the different features have different information weight for the classification.
+
+We have to try to calculate a correlation between the features and the edibility.
+For the unordered categorical features we can use the uncertinity coefficient as correlation score. (See: <https://en.wikipedia.org/wiki/Uncertainty_coefficient>)
+
+The uncertinity score builds on the conditinal entropy form the information theory.
+
+The entropy for a single feature is defined as follows:
+
+$$H(X)= -\sum_{x}P_X(x)logP_X(x)$$
+The conditional entropy of X given Y is defined as follows:
+$$H(X|Y)=-\sum_{x,y}P_{X,Y}(x,y)logP_{X|Y}(x|y)$$
+The uncertinity coefficient of the two features can be calculated as follows:
+$$U(X|Y) = \frac{H(X) - H(X|Y)}{H(X)}$$
+We can implement an R function to calculate the entropy, conditional entropy and the uncertinity coefficient.
+
+The following R code implements the calculation functions:
+
+```{r uncertinty_coefficient_functions, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=15}
+entropy <- function(dataset, colX){
+  
+  ret <- 0
+  summarized_data <- dataset %>% group_by(.[,colX]) %>% summarise(n = n())
+  rowCount <- nrow(dataset)
+  level_items <- levels(dataset[,colX])
+  for (item in level_items){
+    prob <- summarized_data %>% filter(.[,1] == item) %>% pull(n) / rowCount
+    ret <- ret + prob * log(prob,base = 2)
+  }
+  return (-ret)
+}
+
+cond_entropy <- function(dataset, colX, colY){
+  ret <- 0
+  rowCount <- nrow(dataset)
+  summarized_y <- dataset %>% group_by(.[,colY]) %>% summarise(n = n()) 
+  names(summarized_y)[1] <- "Y"
+  level_itemsy <- levels(summarized_y$Y)
+  
+  for (itemy in level_itemsy){
+    proby <- summarized_y %>% filter(Y == itemy) %>% pull(n) / rowCount
+    summarized_x <- dataset %>% filter(.[,colY] == itemy) %>% group_by(.[,colX]) %>% 
+                    summarise(n = n()) 
+    names(summarized_x)[1] <- "X"
+    level_itemsx <- levels(summarized_x$X)
+    for (itemx in level_itemsx){
+      filtered <- summarized_x %>% filter(X == itemx)
+      if (nrow(filtered) > 0 && proby != 0){
+        probxy <-  filtered$n / rowCount
+        probx_at_y <- probxy / proby
+        ret <- ret + probxy * log(probx_at_y,base = 2)
+      }
+    }
+  }
+  return (-ret)
+}
+
+uncertinity <- function(dataset, colX, colY){
+  entr <- entropy(dataset,colX)
+  cond_entr <- cond_entropy(dataset, colX, colY)
+  if (entr == 0){
+    return(0)
+  }
+  return ( (entr - cond_entr) / entr)
+}
+
+```
+
+We can plot the uncertinity coefficient between all the features as a matrix. The following R code creates the plot:
+```{r uncertinty_coefficient_matrix, warning=FALSE, error=FALSE, message=FALSE}
+
+uncertinity_plot <- function(dataset){
+  #calculate uncertinity for all feature pairs
+  uncertinity_df <- data_frame(X=character(), idx=numeric(), Y=character(), 
+                              idy=numeric(), value=numeric())
+  labels <- names(dataset)
+  for (i in 1:ncol(dataset))
+  {
+    for(j in 1:ncol(dataset))
+    {
+      uncertinity_df <- bind_rows(uncertinity_df, data_frame(Y = labels[j], idy=j , 
+                                 X=labels[i], idx=i, value=uncertinity(train_data,i,j)))
+    }
+  }
+  
+  #plot the uncertinity with colors
+  uncertinity_df %>% ggplot(aes(x=reorder(X,idx), y=reorder(Y,-idy), fill=value)) + 
+    geom_tile() + geom_text(aes(label=round(value,2)), color='white') +
+    theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+    xlab('X feature') + ylab('Y feature') + ggtitle('Uncertinity score U(X|Y)')
+}
+
+uncertinity_plot(train_data)
+```
+This plot shows the uncertinity coefficient between all feature pairs. The light blue values show a high uncertinity coefficient (high correlation) the dark blue values shows a low uncertinity coefficient (low correlation)
+The value 1 in the matrix shows a perfect correlation, therefore the matrix diagonal elements are 1. (The diagonal elements show the correlation of the features with himself, therefore there is a perfect correlation)
+
+We see, that the feature veil-type has 0 correlation with all other features. In the first data analysis we saw, that the feature veil-type has only one value and has no prediction information, that causes the 0 correlation.
+
+For the classification model we examine the first column of the matrix. This column shows the correlation betweem edibility and other feature. As we see, the feature odor has the highest correlation with the edibility. The other feature have only a correlation belowe 0.5.
+
+We can use this information for developing a classification model that use only the features with high correlation with the edibility.
+
+# The classification model
+
+The classification model will be evaluated with the F1 score. This score includes not only the overall accuracy, it considers the prediction specificity and sensitivity too.
+
+
+
+
+## Decision tree model
+
+## Feature based model
+
+
+# Implementation & result
+
+
+# Conclusion

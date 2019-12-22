@@ -47,13 +47,13 @@ uncertinity <- function(dataset, colX, colY){
 
 uncertinity_plot <- function(dataset){
   #calculate uncertinity for all feature pairs
-  uncertinity_df <- data.frame(X=factor(), idx=numeric(), Y=factor(), idy=numeric(), value=numeric())
+  uncertinity_df <- data_frame(X=character(), idx=numeric(), Y=character(), idy=numeric(), value=numeric())
   labels <- names(dataset)
   for (i in 1:ncol(dataset))
   {
     for(j in 1:ncol(dataset))
     {
-      uncertinity_df <- bind_rows(uncertinity_df, data.frame(Y = labels[j], idy=j , X=labels[i], idx=i, value=uncertinity(train_data,i,j)))
+      uncertinity_df <- bind_rows(uncertinity_df, data_frame(Y = labels[j], idy=j , X=labels[i], idx=i, value=uncertinity(train_data,i,j)))
     }
   }
   
@@ -72,7 +72,7 @@ feature_ditribution_plot <- function(data){
     summarized_data <- data %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
     names(summarized_data)[2] <- "attr"
     plot <- summarized_data %>% ggplot(aes(attr , classes)) + geom_point(aes(size=n)) +
-      xlab(names(data)[i+1]) + ylab("Eatable") 
+      xlab(names(data)[i+1]) + ylab("Edibility") 
     plots[[i]] <- plot
   }
   rm(summarized_data, i, plot)

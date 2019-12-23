@@ -3,8 +3,9 @@ title: "Data Science 'Mushrooms' Capstone Project"
 author: "András Gelencsér"
 date: "14 December 2019"
 output:
-  pdf_document: default
-  word_document: default
+  pdf_document:
+    toc : true
+    toc_depth : 2 
 ---
 
 
@@ -12,6 +13,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE, fig.width = 12, fig.height = 12)
 ```
 
+\newpage
 # Overview
 
 This document describes the result of the capstone project for the HarvardX Data Science course based on the Mushrooms dataset avaiable in the UCI Machine Learning Repository (Dua, D. and Graff, C. (2019). UCI Machine Learning Repository [http://archive.ics.uci.edu/ml]. Irvine, CA: University of California, School of Information and Computer Science.)
@@ -37,10 +39,10 @@ The following steps were done during the project for developing the algorithm:
 
 I developed two different prediction model. The first model uses a decision tree, the second model uses a reduced set of the features with high correlation to the edibility.
 
-The first model reached an F1 score of 0.9934 with sensitivity 0.9869 and specificity 1.0.
-The second model reached an F1 score of 1 with sensitivity 1 and specificity 1. That shows, that the second model had a perfect prediction for the test set.
+Both developed models reached an F1 score of 1 with sensitivity 1 and specificity 1. That shows, that both models had a perfect prediction for the test set.
 
 
+\newpage
 # Methods & analysis
 
 
@@ -207,10 +209,10 @@ We can see, that the feature veil-type has only the value 'p' (partial), there i
 
 On the other side, there are some features with values that can decide the classification.
 E.g. if we see a mushroom with the value 'f' (foul) for the feature odor, we can classify the mushroom as poisonous.
-The feature values 'c', 'f', 'l', 'm', 'p', 's', 'y' for the attribute odor can give us a classification. With this information we can classify 3,689 mushrooms.
+The feature values 'a','c', 'f', 'l', 'm', 'p', 's', 'y' for the attribute odor can give us either 'e' or 'p' edibility classification. With this information we can classify 3,689 mushrooms.
 We can not classify only the mushrooms with the odor value 'n' (none). There are 2,809 mushrooms remaining in the dataset without classification. 
 
-We can try to analyse all the mushrooms, where the odor value is 'n'. For this analysis we can remove the attribute odor from the dataset, because we examine a specific odor value.
+We can try to analyse all the mushrooms, where the odor value is 'n'. For this analysis we can remove the attribute odor from the dataset, because we examine further only a specific odor value.
 
 The following code removes the odor attribute and plots the feature distirbution for the remaining data:
 
@@ -260,6 +262,7 @@ stalk_surface_below <- gill_size_n %>% filter(`stalk-surface-below-ring` == 's')
 feature_ditribution_plot(stalk_surface_below)
 
 ```
+
 The remaining dataset has only 25 mushrooms. As we can see on the plot, now we can use some feature for classifying this remaining mushrooms.
 E.g. the feature ring-type give us a good classification: if we have a ring type of 'e' (evanescent) than the mushroom is edible. On the other case, if we have a ring-type of 'p' (pedant), the mushroom is poisonous.
 
@@ -369,19 +372,57 @@ For the classification model we examine the first column of the matrix. This col
 
 We can use this information for developing a classification model that use only the features with high correlation with the edibility.
 
+\newpage
 # The classification model
 
-The classification model will be evaluated with the F1 score. This score includes not only the overall accuracy, it considers the prediction specificity and sensitivity too.
+The classification model will be evaluated with the $F_1$ score. This score includes not only the overall accuracy, it considers the prediction specificity and sensitivity too.
+
+The $F_1$ score is the harmonic average of the precision and reacall :
+$$F_1=\frac{1}{\frac{1}{2}(\frac{1}{recall}+\frac{1}{precision})}$$
+where recall is the true positiv rate (sensitivity) and precision is the positiv prediction value (specificity).
 
 
+The model should predict the edibility of the mushrooms, therefore it's more important to make the right prediction for the poisonous mushrooms as the edible.
+Therefore if two models have the same $F_1$ score, the model with the higher true negativ rate (specificity) will be declared as better model.
 
+After the data analysis we can develop two different model:
+* model based on simple decision rules
+* model based on the feature value combinations
+
+The following two chapter describe the two models.
+
+## Decision tree model
+
+As we saw before, we can develop a prediction model based on the feature distribution between the edible and poisonus classes.
+A very easy way to define a decision tree is to examine the generated charts like we did it before.
+
+On the other side, this method is fixed on the current train data set. If the dataset changes, we must to make the analysis again manually.
+
+Therefore we need to develop a method to create a decision tree automatically.
+For this method we can use the same logik as we did:
+
+1. create the edibility distribution for all features for the dataset
+2. search for features, that have values with only either 'e' or 'p' edibility. If we don't find a feature, than we cann't improve our decision tree anymore
+3. if we found some feature in step 2, we select one of them and add to the decision tree
+4. filter out all reords from the dataset that match the feature values with distinct edibility values
+5. if there is no remaining record, than we reached a full decision tree for the train set
+6. if there are remaining records, we start at step 1 again, but we use only the remaining records for the next loop
+
+With this method we can find a decision tree for the train set, that we can use for predict the edibility for the test dataset.
+
+For the prediction, we can go throug the features in the prediction tree and check if the feature in the actual record matches either the feature values with dictinct 'e' or 'p' edibility. If we find a match, we use the corresponding edibility value as prediction.
+If there is no match for all the feature in the prediction tree, we predict 'p' edibility. This is, because, we want to be sure not to predict edible for a possible poisonous mushroom.
+
+
+## Feature based model
+
+\newpage
+# Implementation & result
 
 ## Decision tree model
 
 ## Feature based model
 
 
-# Implementation & result
-
-
+\newpage
 # Conclusion

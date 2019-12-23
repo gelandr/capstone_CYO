@@ -4,7 +4,6 @@ if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org", dependencies = TRUE)
-if(!require(Rborist)) install.packages("Rborist", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 if(!require(cluster)) install.packages("cluster", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 
 source("predict_model.R")
@@ -62,9 +61,16 @@ feature_ditribution_plot(gill_size_n)
 stalk_surface_below <- gill_size_n %>% filter(`stalk-surface-below-ring` == 's') %>% select(-`stalk-surface-below-ring`)
 feature_ditribution_plot(stalk_surface_below)
 
+#predict with fix tree
+predicted_fix <- predict_dectree(test_data %>% select(-classes))
+result_fixdec_tree_model <- confusionMatrix( predicted_fix, test_data$classes)
+
+
 #train decision tree
-predicted <- predict_dectree(test_data %>% select(-classes))
-result_dec_tree_model <- confusionMatrix( predicted$y, test_data$classes)
+predict_tree <- train_decision_tree_model(train_data)
+predicted <- predict_decision_tree(test_data, predict_tree)
+result_dec_tree_model <- confusionMatrix( predicted, test_data$classes)
+
 
 uncertinity_plot(train_data)
 
@@ -78,18 +84,3 @@ opt_feature_count <- which.max(F1_scores$F1)
 #calculate the result for our feature count based model
 result_feature_model <- confusionMatrix(predict_feature_model(test_data, 
                         train_feature_model(train_data, opt_feature_count)), test_data$classes)
-
-
-#remove 'veil-type' it has only one value, therefore is not relevant
-#train_data2 <- train_data %>% select(-`veil-type`)
-
-#train knn method
-#train_knn <- train(classes ~ ., method="knn", data = train_data2)  
-#result_knn <- confusionMatrix(predict(train_knn, test_data, type="raw"), test_data$classes)
-
-#train random forest
-#train_rforest <- train(classes ~ .,
-#                    method = "Rborist",
-#                    tuneGrid = data.frame(predFixed = 2, minNode = c(3, 50)),
-#                    data = train_data2)
-#result_rforest <- confusionMatrix(predict(train_rforest, test_data), test_data$classes)

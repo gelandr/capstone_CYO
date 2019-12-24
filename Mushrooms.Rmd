@@ -416,12 +416,288 @@ If there is no match for all the feature in the prediction tree, we predict 'p' 
 
 ## Feature based model
 
+The uncertinity score matrix give us an overview about the correlation between the edibility classification and other features.
+With this information we can develop a prediction model.
+We can assume, that the most relevant features give use enough information to predict the edibility and we can ignore further features.
+
+For the prediction we take the $n$ most relevant features and select the edibility to all the feature value combination to the features and examine which edibility values occures to this combination.
+For example, we can use the featuers 'odor' and 'spore-print-color' and generate a summary for all existing feature combination to this two featue und the edibility classification.
+
+The following R code lists all features value combination for the mentioned features:
+```{r feature_based_model_matrix, warning=FALSE, error=FALSE, message=FALSE}
+odor_sporeprintcolor_values <- train_data %>% group_by(classes, odor, `spore-print-color`) %>% summarise()
+odor_sporeprintcolor_values %>% print(n = nrow(odor_sporeprintcolor_values))
+```
+
+There are some odor/spore-print-color value combination that have both 'p' and 'e' edibitlity classification.
+for this combination we don't have a definitly prediction. If we want to have a high specificity (we want to predict the poisonous mushrooms as good as possible), we have to predict 'p' in this case.
+
+There are some odor/spore-print-color value combination with exclusive 'p' edibitlity classification. In this case we can predict 'p'.
+
+There are some odor/spore-print-color value combination with exclusive 'e' edibitlity classification. In this case (and only in this case) we can predict, that the mushroom is edible.
+
+Our prediciton model will search all feature value combination with exlusive 'e' edibility form the train set and predict for any record from the test set that mach to one of this value combination 'e' edibility. For all other records in the test set we predict 'p' edibility.
+
+The number of the used feature influences the $F_1$ score of our prediction. With more used feature we can make better prediction. 
+After a specific number of used feature we will get worse $F_1$ score again. That is the effect of the overtraining. Therefore we have to find out the nuber of the features to use for the best prediction performance. 
+
+
 \newpage
 # Implementation & result
 
+In this chapter i will implement the definied two prediction model and analyse the result.
+For the feature based model i will use n-fold cross validation. For this purpose i implemented a function to calculate the n-fold cross validation for given train und test dataset calling a given function.
+
+The following R code implements the n-fold cross validation (The function have to be called with cv_n >= 2):
+
+```{r cross_validation_function, warning=FALSE, error=FALSE, message=FALSE}
+#function for cross validation
+#parameters:
+#     trainset: the train set to use for the cross validation
+#     cv_n:     the count of the cross validation
+#     FUNC:     the function to call for the actual cross validation train and test set (calculated from the param trainset)
+#     ...:      additional parameter necessary for calling the provided function
+#
+#return:
+#     dataframe with the function result for the cross validations (the data frame has cv_n items)
+
+cross_validation <- function(trainset, cv_n, FUNC,...){
+  
+  #get the count of the data rows on the train set
+  data_count = nrow(trainset)
+  
+  #initialize the data frame for the result
+  values_from_cv = data_frame()
+  
+  #randomise the trainset. 
+  #If the train set is ordered (not randomised, like the movielens dataset) the cross validation
+  #will not be independent and provide wrong result
+  trainset_randomised <- trainset[sample(nrow(trainset)),]
+  
+  #create the train- and testset for the cross validation
+  #we need cv_n run, therefore we use a loop 
+  for (i in c(1:cv_n)){
+    #evaulate the size of the test set. This will be the 1/cv_n part of the data
+    part_count = data_count / cv_n
+    
+    #select the data from the parameter train set
+    #we get the part_count size elements from the parameter train set 
+    idx = c(   (trunc((i-1) * part_count) + 1) : trunc(i * part_count) )
+    
+    #tmp holds the new test set
+    test = trainset_randomised[idx,]
+    #train holds the new test set
+    train = trainset_randomised[-idx,]
+    
+    #call the provided function to the actual train and test set.
+    akt_value <- FUNC(train, test,...)
+    
+    #add the result to the data frame
+    #the column 'cv' contains the idx of the cross validation run
+    values_from_cv <- bind_rows(values_from_cv, akt_value %>% mutate(cv = i))
+  }
+  
+  #return the results of each cross validation
+  return(values_from_cv)
+}
+```
+
+For calculation of the $F_1$ score, i will us the confuseMatrix R function. 
+
 ## Decision tree model
 
+As first iteration I implemented a naive decision tree model based on the analysis in the previos chapters.
+This implementation is not trainable, it depends on the obervation about the train dataset.
+The R implementation this naive decision tree is wie follow:
+
+```{r naive_decision_tree_model, warning=FALSE, error=FALSE, message=FALSE}
+predict_dectree_naive <- function(features){
+  predicted <- tibble(y = character())
+  for (i in 1 : nrow(features))
+  {
+    y <- tryCatch({
+        odor <- features[i,]$odor
+        spore_print_color <- features[i,]$`spore-print-color`
+        gill_color <- features[i,]$`gill-color`
+        gill_size <- features[i,]$`gill-size`
+        stalk_surface <- features[i,]$`stalk-surface-below-ring`
+        ring_type <- features[i,]$`ring-type`
+        
+        if (odor %in% c('c','f','m','p','s','y')){
+          'p'
+        }
+        else if (odor  %in% c('a','l')){
+          'e'
+        }
+        else if (spore_print_color %in% c('e','g', 'n','o','p','y')){
+          'e'
+        }
+        else if (spore_print_color %in% c('r')){
+          'p'
+        }
+        else if (gill_color %in% c('y')){
+          'p'
+        }
+        else if (gill_color %in% c('e','g','p')){
+          'e'
+        }
+        else if (gill_size %in% c('b')){
+          'e'
+        }
+        else if (stalk_surface %in% c('f')){
+          'e'
+        }
+        else if (stalk_surface %in% c('y')){
+          'p'
+        }
+        else if (ring_type %in% c('e')){
+          'e'
+        }
+        else{
+          'p'
+        }
+    }, warning = function(w){
+        return('p')
+    }, error = function(e) {
+        return('p')
+    })
+    predicted <- bind_rows(predicted, data_frame(y = y))
+  }
+    
+  predicted <- predicted %>% mutate(y=factor(y, levels=c('e','p'))) %>% pull(y)
+  return(predicted)
+}
+```
+
+With this function we can predict the edibility for the test set:
+```{r result_naive_decision_tree_model, warning=FALSE, error=FALSE, message=FALSE}
+
+predicted_naive <- predict_dectree_naive(test_data %>% select(-classes))
+result_naive_tree_model <- confusionMatrix( predicted_naive, test_data$classes)
+result_naive_tree_model
+```
+The $F_1$ score is 0.9934 with a specificity of 1. 
+
+The next step is to develop a method, that builds the decision tree based on the train set automatically.
+
+
+The following R code implements the building of the decision tree based on a given dataset:
+
+```{r train_decision_tree_model, warning=FALSE, error=FALSE, message=FALSE}
+extend_decision_tree <- function(dataset, decision_rule){
+  
+  newRules <- data_frame(feature=character(),decided_proz=numeric(), e_values=character(), p_values=character())
+  
+  for (i in 1:(ncol(dataset)-1))
+  {
+    feature <- names(dataset)[i+1]
+    summarized_data <- dataset %>% group_by(classes, .[,i+1]) %>% summarise(n = n())
+    names(summarized_data)[2] <- "attr"
+    values <- levels(summarized_data$attr)
+    e_values <- list()
+    p_values <- list()
+    count = nrow(dataset)
+    decided_count = 0
+    e_pos <- 1
+    p_pos <- 1
+    for(val in values){
+      e_count <- summarized_data %>% filter(classes=='e' & attr == val) %>% pull(n)
+      e_count <- ifelse(is_empty(e_count),0,e_count)
+      p_count <- summarized_data %>% filter(classes=='p' & attr == val) %>% pull(n)
+      p_count <- ifelse(is_empty(p_count),0,p_count)
+      
+      
+      if (e_count == 0 && p_count > 0){
+        p_values[[p_pos]] <- val
+        decided_count <- decided_count + p_count
+        p_pos <- p_pos + 1
+      }
+      if (e_count > 0 && p_count == 0){
+        e_values[[e_pos]] <- val
+        decided_count <- decided_count + e_count
+        e_pos <- e_pos + 1
+      }
+    }
+    if (decided_count > 0){
+      e_values <- paste(e_values, collapse=",")
+      p_values <- paste(p_values,collapse=",")
+      newRules <- bind_rows(newRules, data_frame(feature=feature, decided_proz=decided_count / count, e_values = e_values, 
+                                                    p_values = p_values))
+      
+    }
+  }
+  
+  if (nrow(newRules) > 0){
+    idx <- which.max(newRules$decided_proz)
+    bestRule <- newRules[idx,]
+    e_values <- unlist(str_split(bestRule$e_values, ','))
+    p_values <- unlist(str_split(bestRule$p_values, ','))
+    
+    remaining_data <- dataset %>% filter( !(.[,bestRule$feature] %in% e_values) & !(.[,bestRule$feature] %in% p_values))
+    decision_rule <-bind_rows(decision_rule, bestRule)
+    if (nrow(remaining_data) > 0){
+      decision_rule <- extend_decision_tree(remaining_data, decision_rule)  
+    }
+  }
+  
+  return(decision_rule)
+}
+
+train_decision_tree_model <- function(dataset){
+  
+  
+  tree <- data_frame(feature=character(), decided_proz=numeric(), e_values=character(), p_values=character())
+  tree <- extend_decision_tree(dataset, tree)
+  return(tree)
+}
+
+```
+
+Additionally we need a function to predict the edibility for the test set based on the trained decision tree.
+The funcion has to chekc the first decision rules existing in the decision tree and check if the actual record match either the values for the edible or the poisonous classification. If there is no match, the function have to go through the following rules until a match is found or the decision tree has no more rules.
+If there was no match in the entire decision tree, we predict poisonous classification. (We want to be on the safe side with the poisonous mushrooms.)
+
+The following R code implements the predict function for the trained decision tree:
+
+```{r predict_decision_tree_model, warning=FALSE, error=FALSE, message=FALSE}
+predict_decision_tree <- function(dataset, tree){
+  ret <- list()
+  for(i in 1:nrow(dataset)){
+    y <- 'p'
+    count_rules <- nrow(tree)
+    for(j in 1:count_rules){
+      feature <- tree$feature[j]
+      e_values <- unlist(str_split(tree$e_values[j], ','))
+      p_values <- unlist(str_split(tree$p_values[j], ','))
+      
+      if (dataset[i,feature] %in% e_values){
+        y <- 'e'
+        break;
+      }
+      
+      if (dataset[i,feature] %in% p_values){
+        y <- 'p'
+        break;
+      }
+    }
+    ret <- c(ret, y)
+  }
+  return(factor(ret, levels = c('e','p')))
+}
+```
+
+
+```{r result_decision_tree_model, warning=FALSE, error=FALSE, message=FALSE}
+predict_tree <- train_decision_tree_model(train_data)
+predicted <- predict_decision_tree(test_data, predict_tree)
+result_decision_tree_model <- confusionMatrix( predicted, test_data$classes)
+result_decision_tree_model
+```
+With the trained decision tree we have $F_1$ score of 1 with a specificity 1.
+This model made a perfect prediction for the test set.
+
 ## Feature based model
+
 
 
 \newpage

@@ -62,17 +62,20 @@ stalk_surface_below <- gill_size_n %>% filter(`stalk-surface-below-ring` == 's')
 feature_ditribution_plot(stalk_surface_below)
 
 #predict with fix tree
-predicted_fix <- predict_dectree(test_data %>% select(-classes))
-result_fixdec_tree_model <- confusionMatrix( predicted_fix, test_data$classes)
-
+predicted_naive <- predict_dectree(test_data %>% select(-classes))
+result_naive_tree_model <- confusionMatrix( predicted_fix, test_data$classes)
+result_naive_tree_model
 
 #train decision tree
 predict_tree <- train_decision_tree_model(train_data)
 predicted <- predict_decision_tree(test_data, predict_tree)
-result_dec_tree_model <- confusionMatrix( predicted, test_data$classes)
-
+result_decision_tree_model <- confusionMatrix( predicted, test_data$classes)
+result_decision_tree_model
 
 uncertinity_plot(train_data)
+
+odor_sporeprintcolor_values <- train_data %>% group_by(classes, odor, `spore-print-color`) %>% summarise()
+odor_sporeprintcolor_values %>% print(n = nrow(odor_sporeprintcolor_values))
 
 #train features model with cross validation
 F1_scores <- cross_validation(train_data,5, calculate_F1_score, 1:22) %>% group_by(feature_count) %>%
